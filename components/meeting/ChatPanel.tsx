@@ -1,10 +1,9 @@
-'use client';
-
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, X } from 'lucide-react';
 import MessageItem from './MessageItem';
+import AIHelper from './AIHelper';
 import { Message, User } from '@/types';
 
 interface ChatPanelProps {
@@ -16,6 +15,7 @@ interface ChatPanelProps {
 
 export default function ChatPanel({ messages, currentUser, onSendMessage, onClose }: ChatPanelProps) {
   const [messageInput, setMessageInput] = useState('');
+  const [transcript, setTranscript] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -27,7 +27,13 @@ export default function ChatPanel({ messages, currentUser, onSendMessage, onClos
   };
 
   useEffect(() => {
-    // Scroll to bottom when messages change
+    // Update transcript when messages change
+    const newTranscript = messages
+      .map((msg) => `${msg.user?.name || 'Unknown'}: ${msg.content}`)
+      .join('\n');
+    setTranscript(newTranscript);
+    
+    // Scroll to bottom
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -40,21 +46,27 @@ export default function ChatPanel({ messages, currentUser, onSendMessage, onClos
         </Button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">No messages yet</p>
-          </div>
-        ) : (
-          messages.map((message) => (
-            <MessageItem 
-              key={message.id} 
-              message={message} 
-              currentUser={currentUser} 
-            />
-          ))
-        )}
-        <div ref={messagesEndRef} />
+      <div className="flex-1 flex">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-muted-foreground">No messages yet</p>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <MessageItem 
+                key={message.id} 
+                message={message} 
+                currentUser={currentUser} 
+              />
+            ))
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        
+        <div className="w-80 border-l border-border">
+          <AIHelper transcript={transcript} />
+        </div>
       </div>
       
       <div className="p-4 border-t border-border">

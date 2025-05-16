@@ -1,5 +1,3 @@
-'use client';
-
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -8,6 +6,9 @@ import VideoGrid from '@/components/meeting/VideoGrid';
 import ChatPanel from '@/components/meeting/ChatPanel';
 import ControlBar from '@/components/meeting/ControlBar';
 import ParticipantsList from '@/components/meeting/ParticipantsList';
+import BreakoutRooms from '@/components/meeting/BreakoutRooms';
+import { useInterestAnalysis } from '@/hooks/useInterestAnalysis';
+import { useBreakoutRooms } from '@/store/useBreakoutRooms';
 import { Message, User } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -24,11 +25,14 @@ export default function MeetingRoom() {
   const params = useParams();
   const { user, loading } = useAuth();
   const meetingId = params.id as string;
+  const { analyzeMessages } = useInterestAnalysis();
+  const { createRooms } = useBreakoutRooms();
 
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isBreakoutRoomsOpen, setIsBreakoutRoomsOpen] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | undefined>(undefined);
   
@@ -119,6 +123,21 @@ export default function MeetingRoom() {
     };
   }, [user]);
 
+  // Analyze messages and create breakout rooms every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (messages.length > 0 && participants.length >= 3) {
+        const interests = analyzeMessages(messages);
+        createRooms(
+          participants.map(p => p.user),
+          interests
+        );
+      }
+    }, 300000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [messages, participants, analyzeMessages, createRooms]);
+
   const handleToggleAudio = () => {
     if (localStream) {
       const audioTrack = localStream.getAudioTracks()[0];
@@ -203,13 +222,25 @@ export default function MeetingRoom() {
     }
   };
 
-  const toggleSidebar = (sidebar: 'chat' | 'participants') => {
+  const toggleSidebar = (sidebar: 'chat' | 'participants' | 'breakout') => {
     if (sidebar === 'chat') {
       setIsChatOpen(!isChatOpen);
-      if (!isChatOpen) setIsParticipantsOpen(false);
-    } else {
+      if (!isChatOpen) {
+        setIsParticipantsOpen(false);
+        setIsBreakoutRoomsOpen(false);
+      }
+    } else if (sidebar === 'participants') {
       setIsParticipantsOpen(!isParticipantsOpen);
-      if (!isParticipantsOpen) setIsChatOpen(false);
+      if (!isParticipantsOpen) {
+        setIsChatOpen(false);
+        setIsBreakoutRoomsOpen(false);
+      }
+    } else {
+      setIsBreakoutRoomsOpen(!isBreakoutRoomsOpen);
+      if (!isBreakoutRoomsOpen) {
+        setIsChatOpen(false);
+        setIsParticipantsOpen(false);
+      }
     }
   };
 
@@ -227,7 +258,7 @@ export default function MeetingRoom() {
     <MainLayout hideFooter>
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         <div className="flex-1 flex overflow-hidden">
-          <div className={`flex-1 p-4 ${isChatOpen || isParticipantsOpen ? 'md:pr-0' : ''}`}>
+          <div className={`flex-1 p-4 ${isChatOpen || isParticipantsOpen || isBreakoutRoomsOpen ? 'md:pr-0' : ''}`}>
             <VideoGrid participants={participants} />
           </div>
           
@@ -250,6 +281,15 @@ export default function MeetingRoom() {
               />
             </div>
           )}
+
+          {isBreakoutRoomsOpen && (
+            <div className="w-full md:w-80 h-full bg-background">
+              <BreakoutRooms
+                currentUser={user}
+                onClose={() => setIsBreakoutRoomsOpen(false)}
+              />
+            </div>
+          )}
         </div>
         
         <ControlBar
@@ -257,12 +297,14 @@ export default function MeetingRoom() {
           onToggleVideo={handleToggleVideo}
           onToggleChat={() => toggleSidebar('chat')}
           onToggleParticipants={() => toggleSidebar('participants')}
+          onToggleBreakoutRooms={() => toggleSidebar('breakout')}
           onScreenShare={handleScreenShare}
           onLeaveCall={handleLeaveCall}
           isMuted={isMuted}
           isVideoOff={isVideoOff}
           isChatOpen={isChatOpen}
           isParticipantsOpen={isParticipantsOpen}
+          isBreakoutRoomsOpen={isBreakoutRoomsOpen}
           isScreenSharing={isScreenSharing}
         />
       </div>

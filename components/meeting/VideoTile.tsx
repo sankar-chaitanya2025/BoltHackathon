@@ -1,9 +1,8 @@
-'use client';
-
 import { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCalmMode } from '@/store/useCalmMode';
+import { useSettings } from '@/store/useSettings';
 
 interface VideoTileProps {
   stream?: MediaStream;
@@ -17,10 +16,15 @@ export default function VideoTile({ stream, name, isMuted, isLocal = false, isAc
   const [videoRef, setVideoRef] = useState<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { isEnabled: isCalmMode } = useCalmMode();
+  const { brightness, motionIntensity, soundSensitivity } = useSettings();
 
   useEffect(() => {
     if (videoRef && stream) {
       videoRef.srcObject = stream;
+      if (videoRef.style) {
+        videoRef.style.filter = `brightness(${brightness}%)`;
+        videoRef.style.transition = `all ${300 / (motionIntensity / 100)}ms ease`;
+      }
     }
 
     if (audioRef.current && stream) {
@@ -38,7 +42,12 @@ export default function VideoTile({ stream, name, isMuted, isLocal = false, isAc
         source.connect(analyser);
         if (isCalmMode) {
           source.connect(speechFilter);
-          speechFilter.connect(audioContext.destination);
+          
+          // Apply sound sensitivity threshold
+          const gainNode = audioContext.createGain();
+          gainNode.gain.value = soundSensitivity / 100;
+          speechFilter.connect(gainNode);
+          gainNode.connect(audioContext.destination);
         } else {
           source.connect(audioContext.destination);
         }
@@ -48,7 +57,7 @@ export default function VideoTile({ stream, name, isMuted, isLocal = false, isAc
         };
       }
     }
-  }, [stream, videoRef, isCalmMode]);
+  }, [stream, videoRef, isCalmMode, brightness, motionIntensity, soundSensitivity]);
 
   return (
     <div 
@@ -58,6 +67,7 @@ export default function VideoTile({ stream, name, isMuted, isLocal = false, isAc
         "aspect-video",
         isCalmMode && "video-feed"
       )}
+      style={{ '--transition-duration': `${300 / (motionIntensity / 100)}ms` } as React.CSSProperties}
     >
       {stream ? (
         <>
