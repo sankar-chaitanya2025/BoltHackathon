@@ -1,0 +1,54 @@
+config:
+  target: "http://localhost:3000"
+  plugins:
+    metrics-by-endpoint: {}
+  phases:
+    - duration: 300
+      arrivalRate: 10
+      rampTo: 50
+      name: "Warm up"
+    - duration: 600
+      arrivalRate: 50
+      rampTo: 500
+      name: "Ramp up load"
+    - duration: 300
+      arrivalRate: 500
+      name: "Sustained load"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  apdex:
+    threshold: 100
+  ensure:
+    p95: 200
+    maxErrorRate: 1
+
+scenarios:
+  - name: "Meeting flow"
+    flow:
+      - get:
+          url: "/"
+          expect:
+            - statusCode: 200
+      - think: 2
+      - get:
+          url: "/auth/login"
+          expect:
+            - statusCode: 200
+      - think: 3
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ $randomEmail() }}"
+            password: "testpassword123"
+      - think: 2
+      - get:
+          url: "/dashboard"
+      - think: 3
+      - post:
+          url: "/api/meetings"
+          json:
+            title: "Test Meeting {{ $randomString() }}"
+      - think: 2
+      - get:
+          url: "/meeting/{{ meetingId }}"
